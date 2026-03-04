@@ -1,0 +1,39 @@
+{
+  "name": "@deessejs/vfs",
+  "version": "0.1.7",
+  "description": "TypeScript monorepo template with vitest, turbo, husky, and changesets",
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "clean": "turbo clean"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.0",
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "husky": "^9.0.0",
+    "prettier": "^3.0.0",
+    "turbo": "^2.0.0",
+    "typescript-eslint": "^8.0.0"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "changesets": {
+    "baseBranch": "main",
+    "changelog": false,
+    "commit": false,
+    "fixed": [],
+    "linked": [],
+    "access": "restricted"
+  },
+  "nesalia": {
+    "id": "monorepo-ts",
+    "displayName": "Monorepo TS",
+    "description": "Monorepo TS - TypeScript monorepo with vitest, turbo, husky, and changesets"
+  }
+}
