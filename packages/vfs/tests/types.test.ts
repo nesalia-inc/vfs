@@ -10,8 +10,8 @@ describe("types", () => {
         isDirectory: false,
         content: "hello",
         size: 5,
-        createdAt: new Date(),
-        modifiedAt: new Date(),
+        createdAt: "2024-01-01T00:00:00.000Z",
+        modifiedAt: "2024-01-01T00:00:00.000Z",
       };
       expect(isFile(file)).toBe(true);
     });
@@ -22,8 +22,8 @@ describe("types", () => {
         path: "/test",
         isDirectory: true,
         children: [],
-        createdAt: new Date(),
-        modifiedAt: new Date(),
+        createdAt: "2024-01-01T00:00:00.000Z",
+        modifiedAt: "2024-01-01T00:00:00.000Z",
       };
       expect(isFile(dir)).toBe(false);
     });
@@ -36,8 +36,8 @@ describe("types", () => {
         path: "/test",
         isDirectory: true,
         children: [],
-        createdAt: new Date(),
-        modifiedAt: new Date(),
+        createdAt: "2024-01-01T00:00:00.000Z",
+        modifiedAt: "2024-01-01T00:00:00.000Z",
       };
       expect(isDirectory(dir)).toBe(true);
     });
@@ -49,8 +49,8 @@ describe("types", () => {
         isDirectory: false,
         content: "hello",
         size: 5,
-        createdAt: new Date(),
-        modifiedAt: new Date(),
+        createdAt: "2024-01-01T00:00:00.000Z",
+        modifiedAt: "2024-01-01T00:00:00.000Z",
       };
       expect(isDirectory(file)).toBe(false);
     });

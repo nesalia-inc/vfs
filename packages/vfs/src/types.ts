@@ -1,15 +1,17 @@
+export type SizeInBytes = number;
+
 export type FileSystemNode = {
   name: string;
   path: string;
   isDirectory: boolean;
-  createdAt: Date;
-  modifiedAt: Date;
+  createdAt: string;
+  modifiedAt: string;
 };
 
 export type File = FileSystemNode & {
   isDirectory: false;
   content: string;
-  size: number;
+  size: SizeInBytes;
 };
 
 export type Directory = FileSystemNode & {
@@ -19,6 +21,10 @@ export type Directory = FileSystemNode & {
 
 export type FileSystemItem = File | Directory;
 
+/**
+ * Virtual file system interface.
+ * This defines the API contract for implementing a virtual file system.
+ */
 export interface FileSystem {
   root: Directory;
   exists(path: string): boolean;
