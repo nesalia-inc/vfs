@@ -1,21 +1,21 @@
-export interface FileSystemNode {
+export type FileSystemNode = {
   name: string;
   path: string;
   isDirectory: boolean;
   createdAt: Date;
   modifiedAt: Date;
-}
+};
 
-export interface File extends FileSystemNode {
+export type File = FileSystemNode & {
   isDirectory: false;
   content: string;
   size: number;
-}
+};
 
-export interface Directory extends FileSystemNode {
+export type Directory = FileSystemNode & {
   isDirectory: true;
   children: FileSystemNode[];
-}
+};
 
 export type FileSystemItem = File | Directory;
 
