@@ -1,24 +1,36 @@
 export type SizeInBytes = number;
 
+/**
+ * Base type for file system nodes (files and directories).
+ */
 export type FileSystemNode = {
   name: string;
   path: string;
   isDirectory: boolean;
-  createdAt: string;
-  modifiedAt: string;
+  createdAt: Date;
+  modifiedAt: Date;
 };
 
+/**
+ * File type representing a file in the virtual file system.
+ */
 export type File = FileSystemNode & {
   isDirectory: false;
   content: string;
   size: SizeInBytes;
 };
 
+/**
+ * Directory type representing a directory in the virtual file system.
+ */
 export type Directory = FileSystemNode & {
   isDirectory: true;
-  children: FileSystemNode[];
+  children: FileSystemItem[];
 };
 
+/**
+ * Union type for file system items (files or directories).
+ */
 export type FileSystemItem = File | Directory;
 
 /**
@@ -31,15 +43,21 @@ export interface FileSystem {
   get(path: string): FileSystemItem | null;
   mkdir(path: string): Directory;
   touch(path: string, content?: string): File;
-  rm(path: string): boolean;
+  rm(path: string): void;
   read(path: string): string | null;
   write(path: string, content: string): File;
 }
 
-export function isFile(item: FileSystemItem): item is File {
+/**
+ * Type guard to check if a file system node is a file.
+ */
+export function isFile(item: FileSystemNode): item is File {
   return !item.isDirectory;
 }
 
-export function isDirectory(item: FileSystemItem): item is Directory {
+/**
+ * Type guard to check if a file system node is a directory.
+ */
+export function isDirectory(item: FileSystemNode): item is Directory {
   return item.isDirectory;
 }
