@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isFile, isDirectory, File, Directory } from "./types";
+import { isFile, isDirectory, File, Directory } from "../src/types";
 
 describe("types", () => {
   describe("isFile", () => {
