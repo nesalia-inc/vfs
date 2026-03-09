@@ -12,7 +12,7 @@ This document describes all features and functionalities provided by the `@deess
 6. [File System Events](#file-system-events)
 7. [Shell Module](#shell-module)
 
-> Note: The VFS uses [Maybe](https://github.com/nesalia-inc/fp) and [Result](https://github.com/nesalia-inc/fp) monads from the `@nesalia/fp` package for error handling.
+> Note: The VFS uses [Maybe](https://github.com/nesalia-inc/fp) and [Result](https://github.com/nesalia-inc/fp) monads from the `@deessejs/core` package for error handling.
 
 ---
 
@@ -410,7 +410,7 @@ shell.exec('ls src')           // Outputs: main.ts
 
 1. **Pure TypeScript** - No external dependencies
 2. **No Classes** - Functions only
-3. **Maybe/Result Monads** - From `@nesalia/fp` package
+3. **Maybe/Result Monads** - From `@deessejs/core` package
 4. **Path Validation** - Security against traversal attacks
 5. **Cross-Platform** - Works in Node.js and browser
 6. **Event-Driven** - Watch for changes
