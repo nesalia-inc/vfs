@@ -5,14 +5,14 @@ This document describes all features and functionalities provided by the `@deess
 ## Table of Contents
 
 1. [Core Data Structures](#core-data-structures)
-2. [Maybe Monad](#maybe-monad)
-3. [Result Monad](#result-monad)
-4. [Helper Functions](#helper-functions)
-5. [Path Utilities](#path-utilities)
-6. [Core VFS API](#core-vfs-api)
-7. [Lock System](#lock-system)
-8. [File System Events](#file-system-events)
-9. [Shell Module](#shell-module)
+2. [Helper Functions](#helper-functions)
+3. [Path Utilities](#path-utilities)
+4. [Core VFS API](#core-vfs-api)
+5. [Lock System](#lock-system)
+6. [File System Events](#file-system-events)
+7. [Shell Module](#shell-module)
+
+> Note: The VFS uses [Maybe](https://github.com/nesalia-inc/fp) and [Result](https://github.com/nesalia-inc/fp) monads from the `@nesalia/fp` package for error handling.
 
 ---
 
@@ -72,89 +72,6 @@ type FileSystemItem = File | Directory
 ```
 
 Union type representing either a file or a directory.
-
----
-
-## Maybe Monad
-
-The Maybe monad handles optional values where the absence of a value is a valid state.
-
-### Type Definition
-
-```typescript
-type Maybe<T> =
-  | { _tag: 'none' }
-  | { _tag: 'some'; value: T }
-```
-
-### Functions
-
-| Function | Description |
-|----------|-------------|
-| `none<T>()` | Creates a none value |
-| `some<T>(value)` | Wraps a value in some |
-| `isSome<T>(m)` | Type guard for some |
-| `isNone<T>(m)` | Type guard for none |
-| `map<T, U>(m, f)` | Transforms the value if present |
-| `flatMap<T, U>(m, f)` | Chains Maybe operations |
-| `getOrElse<T>(m, default)` | Returns value or default |
-
-### Usage Example
-
-```typescript
-const findUser = (id: string): Maybe<User> => {
-  const user = users.get(id)
-  return user ? some(user) : none()
-}
-
-const result = findUser('123')
-if (isSome(result)) {
-  console.log(result.value.name)
-}
-```
-
----
-
-## Result Monad
-
-The Result monad handles operations that can fail, providing explicit error handling.
-
-### Type Definition
-
-```typescript
-type Result<T, E> =
-  | { _tag: 'ok'; value: T }
-  | { _tag: 'err'; error: E }
-```
-
-### Functions
-
-| Function | Description |
-|----------|-------------|
-| `ok<T, E>(value)` | Creates a success result |
-| `err<T, E>(error)` | Creates an error result |
-| `isOk<T, E>(r)` | Type guard for success |
-| `isErr<T, E>(r)` | Type guard for error |
-| `map<T, U, E>(r, f)` | Transforms the success value |
-| `mapErr<T, E, F>(r, f)` | Transforms the error |
-| `flatMap<T, U, E>(r, f)` | Chains Result operations |
-| `getOrElse<T, E>(r, default)` | Returns value or default |
-
-### Usage Example
-
-```typescript
-const readFile = (path: string): Result<string, FSError> => {
-  const file = vfs.get(path)
-  if (!file) return err({ type: 'not_found', path })
-  if (file.isDirectory) return err({ type: 'not_file', path })
-  return ok(file.content)
-}
-
-const result = readFile('/src/main.ts')
-if (isErr(result)) {
-  console.error(result.error.type) // TypeScript knows the error type
-}
-```
 
 ---
 
@@ -493,7 +410,7 @@ shell.exec('ls src')           // Outputs: main.ts
 
 1. **Pure TypeScript** - No external dependencies
 2. **No Classes** - Functions only
-3. **Maybe/Result Monads** - Native error handling
+3. **Maybe/Result Monads** - From `@nesalia/fp` package
 4. **Path Validation** - Security against traversal attacks
 5. **Cross-Platform** - Works in Node.js and browser
 6. **Event-Driven** - Watch for changes
