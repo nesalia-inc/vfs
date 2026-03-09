@@ -4,15 +4,29 @@ This document describes all features and functionalities provided by the `@deess
 
 ## Table of Contents
 
-1. [Core Data Structures](#core-data-structures)
-2. [Helper Functions](#helper-functions)
-3. [Path Utilities](#path-utilities)
-4. [Core VFS API](#core-vfs-api)
-5. [Lock System](#lock-system)
-6. [File System Events](#file-system-events)
-7. [Shell Module](#shell-module)
+1. [Installation](#installation)
+2. [Core Data Structures](#core-data-structures)
+3. [Helper Functions](#helper-functions)
+4. [Path Utilities](#path-utilities)
+5. [Core VFS API](#core-vfs-api)
+6. [Lock System](#lock-system)
+7. [File System Events](#file-system-events)
+8. [Shell Module](#shell-module)
+9. [Design Principles](#design-principles)
 
 > Note: The VFS uses [Maybe](https://github.com/nesalia-inc/fp) and [Result](https://github.com/nesalia-inc/fp) monads from the `@deessejs/core` package for error handling.
+
+---
+
+## Installation
+
+```bash
+pnpm add @deessejs/vfs
+```
+
+```typescript
+import { File, Directory, createFileSystem } from '@deessejs/vfs';
+```
 
 ---
 
@@ -33,20 +47,17 @@ A type representing the size of a file in bytes.
 ```typescript
 type FileSystemNode = {
   name: string
-  path: string
-  isDirectory: boolean
   createdAt: Date
   modifiedAt: Date
 }
 ```
 
-The base type for both files and directories.
+The base type for both files and directories. Note: the `path` is derived from the tree structure, not stored in each node, to avoid denormalization.
 
 ### File
 
 ```typescript
 type File = FileSystemNode & {
-  isDirectory: false
   content: string
   size: SizeInBytes
 }
@@ -58,12 +69,11 @@ A file represents a regular file in the virtual file system with its content sto
 
 ```typescript
 type Directory = FileSystemNode & {
-  isDirectory: true
-  children: FileSystemItem[]
+  children: Record<string, FileSystemItem>
 }
 ```
 
-A directory contains a collection of files and subdirectories.
+A directory contains a collection of files and subdirectories. Using `Record` provides O(1) lookup by name.
 
 ### FileSystemItem
 
@@ -90,7 +100,7 @@ type FileConfig = {
 }
 ```
 
-Creates a new file with auto-generated timestamps.
+Creates a new file with auto-generated timestamps and calculated size.
 
 ```typescript
 const myFile = file({
@@ -132,7 +142,7 @@ const myFolder = folder({
 
 ## Path Utilities
 
-Path manipulation and validation functions.
+Path manipulation and validation functions. All functions work with Unix-style paths (`/`) and automatically handle Windows paths.
 
 ### Constants
 
@@ -183,13 +193,13 @@ The VFS includes security measures against path traversal attacks:
 - No traversal beyond root (`../../etc/passwd`)
 - No invalid characters
 - Path length validation
-- Windows support (drive letters, backslashes)
+- Windows support: converts backslashes to forward slashes, handles drive letters
 
 ---
 
 ## Core VFS API
 
-The main virtual file system operations.
+The main virtual file system operations. All operations use the `@deessejs/core` Result monad for error handling.
 
 ### Factory
 
@@ -202,22 +212,29 @@ const vfs = createFileSystem({
 
 ### Operations
 
+All methods that can fail return a `Result`:
+
 | Method | Signature | Returns |
 |--------|-----------|---------|
-| `readFile` | `(path: string) => Result<string, NotFound \| NotFile>` | File content |
-| `writeFile` | `(path: string, content: string) => Result<void, WriteError>` | Success or error |
-| `mkdir` | `(path: string) => Result<void, MkdirError>` | Success or error |
-| `rm` | `(path: string) => Result<void, RmError>` | Success or error |
-| `rename` | `(oldPath: string, newPath: string) => Result<void, RenameError>` | Success or error |
-| `copy` | `(src: string, dest: string) => Result<void, CopyError>` | Success or error |
-| `move` | `(src: string, dest: string) => Result<void, MoveError>` | Success or error |
-| `readDir` | `(path: string) => Result<string[], NotFound \| NotDirectory>` | Directory contents |
+| `readFile` | `(path: string) => Result<string, FSError>` | File content |
+| `writeFile` | `(path: string, content: string) => Result<File, FSError>` | Created/updated file |
+| `mkdir` | `(path: string) => Result<Directory, FSError>` | Created directory |
+| `rm` | `(path: string) => Result<void, FSError>` | Success |
+| `rename` | `(oldPath: string, newPath: string) => Result<void, FSError>` | Success |
+| `copy` | `(src: string, dest: string) => Result<void, FSError>` | Success |
+| `move` | `(src: string, dest: string) => Result<void, FSError>` | Success |
+| `readDir` | `(path: string) => Result<string[], FSError>` | Directory entries |
+| `stat` | `(path: string) => Result<FileSystemItem, FSError>` | Node at path |
+| `setCwd` | `(path: string) => Result<void, FSError>` | Success |
+
+Methods that return boolean for simple checks:
+
+| Method | Signature | Returns |
+|--------|-----------|---------|
 | `exists` | `(path: string) => boolean` | Boolean |
 | `isFile` | `(path: string) => boolean` | Boolean |
 | `isDirectory` | `(path: string) => boolean` | Boolean |
-| `stat` | `(path: string) => Result<FileNode, NotFound>` | File metadata |
 | `getCwd` | `() => string` | Current directory |
-| `setCwd` | `(path: string) => Result<void, SetCwdError>` | Success or error |
 
 ### Error Types
 
@@ -239,31 +256,44 @@ type FSError =
 ### Usage Example
 
 ```typescript
+import { createFileSystem, folder, isOk, isErr } from '@deessejs/vfs';
+import { err } from '@deessejs/core';
+
 const vfs = createFileSystem({
   root: folder({ name: '/' }),
   cwd: '/'
 })
 
 // Create files and directories
-vfs.mkdir('/src')
-vfs.writeFile('/src/main.ts', 'console.log("hello")')
-
-// Read file
-const content = vfs.readFile('/src/main.ts')
-if (isOk(content)) {
-  console.log(content.value)
+const mkdirResult = vfs.mkdir('/src')
+if (isErr(mkdirResult)) {
+  console.error(mkdirResult.error)
+  return
 }
 
-// Error handling
+const writeResult = vfs.writeFile('/src/main.ts', 'console.log("hello")')
+if (isErr(writeResult)) {
+  console.error(writeResult.error)
+  return
+}
+
+// Read file
+const readResult = vfs.readFile('/src/main.ts')
+if (isOk(readResult)) {
+  console.log(readResult.value) // 'console.log("hello")'
+}
+
+// Error handling with exhaustive checking
 const result = vfs.readFile('/missing.ts')
 if (isErr(result)) {
   switch (result.error.type) {
     case 'not_found':
-      console.log('File not found')
+      console.log('File not found:', result.error.path)
       break
     case 'not_file':
-      console.log('Path is a directory')
+      console.log('Path is a directory:', result.error.path)
       break
+    // TypeScript ensures all cases are handled
   }
 }
 ```
@@ -278,17 +308,17 @@ Prevents modification, deletion, or renaming of files and directories.
 
 ```typescript
 type LockPermissions = {
-  write?: boolean      // Block writeFile
-  delete?: boolean     // Block rm
-  rename?: boolean     // Block rename
-  lock?: boolean       // Block adding new locks
+  write: boolean      // Block writeFile (default: true)
+  delete: boolean     // Block rm (default: true)
+  rename: boolean     // Block rename (default: true)
+  lock: boolean       // Block adding new locks (default: false)
 }
 
 type Lock = {
   owner: string
   permissions: LockPermissions
   reason?: string
-  createdAt: number
+  createdAt: Date
 }
 
 type LockError =
@@ -296,31 +326,46 @@ type LockError =
   | { type: 'not_owner'; lock: Lock }
   | { type: 'already_locked'; lock: Lock }
   | { type: 'force_required'; lock: Lock }
+  | { type: 'not_locked'; path: string }
 ```
 
 ### API
 
-| Method | Description |
-|--------|-------------|
-| `lock(path, owner, permissions?, reason?)` | Applies a lock to a path |
-| `unlock(path, owner?, force?)` | Removes a lock |
-| `getLock(path)` | Gets the current lock |
+All lock operations return `Result`:
+
+| Method | Signature | Returns |
+|--------|-----------|---------|
+| `lock` | `(path: string, owner: string, permissions: LockPermissions, reason?: string) => Result<Lock, FSError \| LockError>` | The lock |
+| `unlock` | `(path: string, owner?: string, force?: boolean) => Result<void, LockError>` | Success |
+| `getLock` | `(path: string) => Maybe<Lock>` | The lock if exists |
 
 ### Usage Example
 
 ```typescript
-// Lock a file
-vfs.lock('/src/main.ts', 'user1', { write: true }, 'Working on it')
-
-// Attempt to write (will fail)
-const result = vfs.writeFile('/src/main.ts', 'new content')
-if (isErr(result) && result.error.type === 'locked') {
-  console.log('File is locked by:', result.error.lock.owner)
+// Lock a file (defaults: write=true, delete=true, rename=true, lock=false)
+const lockResult = vfs.lock('/src/main.ts', 'user1', { write: true, delete: false }, 'Working on it')
+if (isErr(lockResult)) {
+  console.error(lockResult.error)
 }
 
-// Unlock
+// Attempt to write (will fail)
+const writeResult = vfs.writeFile('/src/main.ts', 'new content')
+if (isErr(writeResult) && writeResult.error.type === 'locked') {
+  console.log('File is locked by:', writeResult.error.lock.owner)
+}
+
+// Unlock (must be owner or force)
 vfs.unlock('/src/main.ts', 'user1')
+
+// Force unlock (bypass owner check)
+vfs.unlock('/src/main.ts', undefined, true)
 ```
+
+### Lock Features
+
+- **Default permissions**: Write, delete, and rename are blocked by default
+- **Recursive locking**: Locking a directory does not automatically lock children
+- **Timeout support**: Locks can optionally expire after a duration (planned)
 
 ---
 
@@ -341,7 +386,7 @@ type FSEventKind =
   | { kind: 'unlock'; path: string }
 
 type FSEvent = FSEventKind & {
-  timestamp: number
+  timestamp: Date
   actor?: string
 }
 ```
@@ -404,14 +449,42 @@ shell.exec('cat src/main.ts')  // Outputs: hello
 shell.exec('ls src')           // Outputs: main.ts
 ```
 
+### Planned Shell Features
+
+- Pipes `|`
+- Redirections `>`, `>>`, `<`
+- Environment variables `$VAR`
+- Glob patterns `*.ts`
+- Command: `grep`, `find`, `tree`
+- Command history
+- Tab completion
+
 ---
 
 ## Design Principles
 
-1. **Pure TypeScript** - No external dependencies
-2. **No Classes** - Functions only
-3. **Maybe/Result Monads** - From `@deessejs/core` package
+1. **Pure TypeScript** - No external runtime dependencies
+2. **No Classes** - Functions only for better composability
+3. **Maybe/Result Monads** - From `@deessejs/core` for explicit error handling
 4. **Path Validation** - Security against traversal attacks
 5. **Cross-Platform** - Works in Node.js and browser
 6. **Event-Driven** - Watch for changes
 7. **Separation of Concerns** - VFS is pure, Shell interprets commands
+8. **Normalized Data** - No redundant data in types (path derived from tree, size calculated)
+9. **Consistent Timestamps** - All dates use `Date` type
+10. **Efficient Lookups** - Children stored as `Record` for O(1) access
+
+---
+
+## Planned Features
+
+The following features are planned for future versions:
+
+- Binary file support (`Uint8Array`, `Blob`)
+- File metadata (mime type, permissions)
+- File system snapshots/clones
+- Search operations (`find`, `glob`, `grep`)
+- Lock timeouts/expiration
+- Batch operations
+- Audit log
+- Undo/redo
