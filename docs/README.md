@@ -228,8 +228,10 @@ All methods that can fail return a `Result`:
 
 | Method | Signature | Returns |
 |--------|-----------|---------|
-| `readFile` | `(path: string) => Result<string, FSError>` | File content |
-| `writeFile` | `(path: string, content: string) => Result<File, FSError>` | Created/updated file |
+| `readText` | `(path: string) => Result<string, FSError>` | File content as string |
+| `readBinary` | `(path: string) => Result<Uint8Array, FSError>` | File content as binary |
+| `read` | `(path: string) => Result<File, FSError>` | Full file node with content |
+| `writeFile` | `(path: string, content: string | Uint8Array) => Result<File, FSError>` | Created/updated file |
 | `mkdir` | `(path: string, options?: { recursive?: boolean }) => Result<Directory, FSError>` | Created directory |
 | `rm` | `(path: string) => Result<void, FSError>` | Success |
 | `rename` | `(oldPath: string, newPath: string) => Result<void, FSError>` | Success |
@@ -288,10 +290,16 @@ if (isErr(writeResult)) {
   return
 }
 
-// Read file
-const readResult = vfs.readFile('/src/main.ts')
+// Read text file
+const readResult = vfs.readText('/src/main.ts')
 if (isOk(readResult)) {
   console.log(readResult.value) // 'console.log("hello")'
+}
+
+// Read binary file
+const binaryResult = vfs.readBinary('/src/image.png')
+if (isOk(binaryResult)) {
+  console.log(binaryResult.value.length) // byte length
 }
 
 // Error handling with exhaustive checking
@@ -324,8 +332,11 @@ type OverwriteMode = 'fail' | 'replace' | 'merge'
 ```
 
 - **`fail`** (default): Throws an error if destination exists
-- **`replace`**: Overwrites the destination
-- **`merge`** (directories only): Merges children
+- **`replace`**: Overwrites the destination entirely
+- **`merge`** (directories only): Recursively merges children
+  - Files with the same name are replaced
+  - Subdirectories are merged recursively
+  - New files/directories are added
 
 ```typescript
 // This will fail if '/dest' already exists
@@ -337,12 +348,12 @@ vfs.copy('/src', '/dest', { mode: 'replace' })
 
 ### Lock Inheritance (Bubble-up)
 
-When performing destructive operations, the VFS checks locks on the target **and all its ancestors**.
+When performing destructive operations, the VFS checks locks on the target **and all its ancestors**. This is called "Inherited Protection" - a lock on a directory implicitly protects its entire subtree.
 
 If you attempt to `rm /a/b/c`:
 1. Check if `c` is locked
-2. Check if `b` is locked
-3. Check if `a` is locked
+2. Check if `b` is locked (parent of `c`)
+3. Check if `a` is locked (parent of `b`)
 
 If any ancestor is locked with the appropriate permission, the operation fails.
 
@@ -350,12 +361,8 @@ If any ancestor is locked with the appropriate permission, the operation fails.
 // Lock a file
 vfs.lock('/project/src/main.ts', 'user1', { delete: true })
 
-// This will fail - parent directory is not locked but that's fine
-// Actually wait - the check goes UP, not down
-// So this should work unless parent is locked
-
-// To lock entire subtree:
-vfs.lock('/project/src', 'user1', { delete: true })
+// Attempting to delete will fail - parent is also protected by ancestor locks
+vfs.lock('/project/src', 'admin', { delete: true })
 // Now /project/src and ALL children cannot be deleted
 ```
 
@@ -442,8 +449,7 @@ vfs.unlock('/src/main.ts', undefined, true)
 ### Lock Features
 
 - **Default permissions**: Write, delete, and rename are blocked by default
-- **Ancestor checking**: Deleting a file checks all parent directories for locks
-- **Recursive locking**: Locking a directory locks all its children implicitly
+- **Inherited Protection**: Locking a directory implicitly protects all its children. Operations on any descendant will check ancestor locks.
 - **Timeout support**: Locks can optionally expire after a duration (planned)
 
 ---
@@ -542,9 +548,13 @@ const shell = createShell({ vfs })
 
 shell.exec('mkdir src')
 shell.exec('touch src/main.ts')
-shell.exec('echo "hello" > src/main.ts')
-shell.exec('cat src/main.ts')  // stdout: hello
+shell.exec('cat src/main.ts')  // stdout: (empty file)
 shell.exec('ls src')          // stdout: main.ts
+
+// Write content using VFS directly (redirections planned)
+vfs.writeFile('/src/main.ts', 'hello')
+const result = shell.exec('cat src/main.ts')
+// result.stdout = 'hello'
 ```
 
 ### Planned Shell Features
@@ -590,3 +600,4 @@ The following features are planned for future versions:
 - Undo/redo
 - Async variants for future provider support
 - Streaming for large files
+- Atomic operations / Transactions (rollback on failure)
