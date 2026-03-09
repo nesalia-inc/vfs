@@ -20,36 +20,13 @@ This document describes all features and functionalities provided by the `@deess
 
 The VFS package provides TypeScript types for representing files and directories in a virtual file system.
 
-### File
+### SizeInBytes
 
 ```typescript
-type File = {
-  name: string
-  path: string
-  isDirectory: false
-  content: string
-  size: SizeInBytes
-  createdAt: Date
-  modifiedAt: Date
-}
+type SizeInBytes = number
 ```
 
-A file represents a regular file in the virtual file system with its content stored in memory.
-
-### Directory
-
-```typescript
-type Directory = {
-  name: string
-  path: string
-  isDirectory: true
-  children: FileSystemItem[]
-  createdAt: Date
-  modifiedAt: Date
-}
-```
-
-A directory contains a collection of files and subdirectories.
+A type representing the size of a file in bytes.
 
 ### FileSystemNode
 
@@ -64,6 +41,29 @@ type FileSystemNode = {
 ```
 
 The base type for both files and directories.
+
+### File
+
+```typescript
+type File = FileSystemNode & {
+  isDirectory: false
+  content: string
+  size: SizeInBytes
+}
+```
+
+A file represents a regular file in the virtual file system with its content stored in memory.
+
+### Directory
+
+```typescript
+type Directory = FileSystemNode & {
+  isDirectory: true
+  children: FileSystemItem[]
+}
+```
+
+A directory contains a collection of files and subdirectories.
 
 ### FileSystemItem
 
