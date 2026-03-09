@@ -9,10 +9,12 @@ This document describes all features and functionalities provided by the `@deess
 3. [Helper Functions](#helper-functions)
 4. [Path Utilities](#path-utilities)
 5. [Core VFS API](#core-vfs-api)
-6. [Lock System](#lock-system)
-7. [File System Events](#file-system-events)
-8. [Shell Module](#shell-module)
-9. [Design Principles](#design-principles)
+6. [Safety & Policies](#safety--policies)
+7. [Lock System](#lock-system)
+8. [File System Events](#file-system-events)
+9. [Shell Module](#shell-module)
+10. [Design Principles](#design-principles)
+11. [Planned Features](#planned-features)
 
 > Note: The VFS uses [Maybe](https://github.com/nesalia-inc/fp) and [Result](https://github.com/nesalia-inc/fp) monads from the `@deessejs/core` package for error handling.
 
@@ -40,7 +42,7 @@ The VFS package provides TypeScript types for representing files and directories
 type SizeInBytes = number
 ```
 
-A type representing the size of a file in bytes.
+A type representing the size of a file in bytes. The size is stored (not computed on every access) for performance. The VFS automatically maintains this value when file content changes.
 
 ### FileSystemNode
 
@@ -58,12 +60,16 @@ The base type for both files and directories. Note: the `path` is derived from t
 
 ```typescript
 type File = FileSystemNode & {
-  content: string
+  content: string | Uint8Array
   size: SizeInBytes
 }
 ```
 
-A file represents a regular file in the virtual file system with its content stored in memory.
+A file represents a regular file in the virtual file system. The content can be either:
+- `string` - For text files (default, UTF-16 internally)
+- `Uint8Array` - For binary files (images, executables, etc.)
+
+> **Note:** The VFS automatically maintains the `size` property when content changes.
 
 ### Directory
 
@@ -96,7 +102,7 @@ const file = (config: FileConfig): File
 
 type FileConfig = {
   name: string
-  content?: string
+  content?: string | Uint8Array
 }
 ```
 
@@ -106,6 +112,12 @@ Creates a new file with auto-generated timestamps and calculated size.
 const myFile = file({
   name: 'main.ts',
   content: 'console.log("hello")'
+})
+
+// Binary file
+const imageFile = file({
+  name: 'image.png',
+  content: new Uint8Array([0x89, 0x50, 0x4E, 0x47, ...])
 })
 ```
 
@@ -218,11 +230,11 @@ All methods that can fail return a `Result`:
 |--------|-----------|---------|
 | `readFile` | `(path: string) => Result<string, FSError>` | File content |
 | `writeFile` | `(path: string, content: string) => Result<File, FSError>` | Created/updated file |
-| `mkdir` | `(path: string) => Result<Directory, FSError>` | Created directory |
+| `mkdir` | `(path: string, options?: { recursive?: boolean }) => Result<Directory, FSError>` | Created directory |
 | `rm` | `(path: string) => Result<void, FSError>` | Success |
 | `rename` | `(oldPath: string, newPath: string) => Result<void, FSError>` | Success |
-| `copy` | `(src: string, dest: string) => Result<void, FSError>` | Success |
-| `move` | `(src: string, dest: string) => Result<void, FSError>` | Success |
+| `copy` | `(src: string, dest: string, options?: { mode?: OverwriteMode }) => Result<void, FSError>` | Success |
+| `move` | `(src: string, dest: string, options?: { mode?: OverwriteMode }) => Result<void, FSError>` | Success |
 | `readDir` | `(path: string) => Result<string[], FSError>` | Directory entries |
 | `stat` | `(path: string) => Result<FileSystemItem, FSError>` | Node at path |
 | `setCwd` | `(path: string) => Result<void, FSError>` | Success |
@@ -257,7 +269,6 @@ type FSError =
 
 ```typescript
 import { createFileSystem, folder, isOk, isErr } from '@deessejs/vfs';
-import { err } from '@deessejs/core';
 
 const vfs = createFileSystem({
   root: folder({ name: '/' }),
@@ -265,7 +276,7 @@ const vfs = createFileSystem({
 })
 
 // Create files and directories
-const mkdirResult = vfs.mkdir('/src')
+const mkdirResult = vfs.mkdir('/src', { recursive: true })
 if (isErr(mkdirResult)) {
   console.error(mkdirResult.error)
   return
@@ -300,6 +311,72 @@ if (isErr(result)) {
 
 ---
 
+## Safety & Policies
+
+This section defines the default behaviors and safety mechanisms of the VFS.
+
+### Overwrite Policy
+
+By default, operations that could overwrite existing files **fail** to prevent accidental data loss.
+
+```typescript
+type OverwriteMode = 'fail' | 'replace' | 'merge'
+```
+
+- **`fail`** (default): Throws an error if destination exists
+- **`replace`**: Overwrites the destination
+- **`merge`** (directories only): Merges children
+
+```typescript
+// This will fail if '/dest' already exists
+vfs.copy('/src', '/dest')
+
+// Explicitly allow overwrite
+vfs.copy('/src', '/dest', { mode: 'replace' })
+```
+
+### Lock Inheritance (Bubble-up)
+
+When performing destructive operations, the VFS checks locks on the target **and all its ancestors**.
+
+If you attempt to `rm /a/b/c`:
+1. Check if `c` is locked
+2. Check if `b` is locked
+3. Check if `a` is locked
+
+If any ancestor is locked with the appropriate permission, the operation fails.
+
+```typescript
+// Lock a file
+vfs.lock('/project/src/main.ts', 'user1', { delete: true })
+
+// This will fail - parent directory is not locked but that's fine
+// Actually wait - the check goes UP, not down
+// So this should work unless parent is locked
+
+// To lock entire subtree:
+vfs.lock('/project/src', 'user1', { delete: true })
+// Now /project/src and ALL children cannot be deleted
+```
+
+### Circular Reference Prevention
+
+The VFS prevents creating circular directory structures (e.g., moving `/a` into `/a/b`).
+
+```typescript
+// This would create: /a/b/a (circular!)
+vfs.move('/a', '/a/b/a')
+// → Error: { type: 'circular_reference'; path: '/a/b/a' }
+```
+
+### Memory Management
+
+- **Immediate cleanup**: When a file is deleted, its content is eligible for garbage collection
+- **No snapshots**: The VFS does not maintain internal history (planned feature)
+- **Binary content**: `Uint8Array` is preferred for large files as it's more memory-efficient than strings
+
+---
+
 ## Lock System
 
 Prevents modification, deletion, or renaming of files and directories.
@@ -310,7 +387,7 @@ Prevents modification, deletion, or renaming of files and directories.
 type LockPermissions = {
   write: boolean      // Block writeFile (default: true)
   delete: boolean     // Block rm (default: true)
-  rename: boolean     // Block rename (default: true)
+  rename: boolean    // Block rename (default: true)
   lock: boolean       // Block adding new locks (default: false)
 }
 
@@ -327,6 +404,7 @@ type LockError =
   | { type: 'already_locked'; lock: Lock }
   | { type: 'force_required'; lock: Lock }
   | { type: 'not_locked'; path: string }
+  | { type: 'parent_locked'; path: string; lock: Lock }
 ```
 
 ### API
@@ -364,7 +442,8 @@ vfs.unlock('/src/main.ts', undefined, true)
 ### Lock Features
 
 - **Default permissions**: Write, delete, and rename are blocked by default
-- **Recursive locking**: Locking a directory does not automatically lock children
+- **Ancestor checking**: Deleting a file checks all parent directories for locks
+- **Recursive locking**: Locking a directory locks all its children implicitly
 - **Timeout support**: Locks can optionally expire after a duration (planned)
 
 ---
@@ -433,6 +512,25 @@ const shell = createShell({ vfs })
 | `mv <src> <dest>` | Move/rename file or directory |
 | `echo <text>` | Print text to output |
 
+### Return Value
+
+Each command returns a structured result for programmatic use:
+
+```typescript
+type ShellResult = {
+  stdout: string
+  stderr: string
+  exitCode: number
+}
+
+const result = shell.exec('cat /src/main.ts')
+// result = { stdout: 'console.log("hello")', stderr: '', exitCode: 0 }
+
+if (result.exitCode !== 0) {
+  console.error(result.stderr)
+}
+```
+
 ### Usage Example
 
 ```typescript
@@ -445,8 +543,8 @@ const shell = createShell({ vfs })
 shell.exec('mkdir src')
 shell.exec('touch src/main.ts')
 shell.exec('echo "hello" > src/main.ts')
-shell.exec('cat src/main.ts')  // Outputs: hello
-shell.exec('ls src')           // Outputs: main.ts
+shell.exec('cat src/main.ts')  // stdout: hello
+shell.exec('ls src')          // stdout: main.ts
 ```
 
 ### Planned Shell Features
@@ -470,9 +568,11 @@ shell.exec('ls src')           // Outputs: main.ts
 5. **Cross-Platform** - Works in Node.js and browser
 6. **Event-Driven** - Watch for changes
 7. **Separation of Concerns** - VFS is pure, Shell interprets commands
-8. **Normalized Data** - No redundant data in types (path derived from tree, size calculated)
+8. **Normalized Data** - No redundant data in types (path derived from tree)
 9. **Consistent Timestamps** - All dates use `Date` type
 10. **Efficient Lookups** - Children stored as `Record` for O(1) access
+11. **Fail by Default** - Operations fail on conflicts to prevent data loss
+12. **Safety First** - Lock inheritance and circular reference prevention
 
 ---
 
@@ -482,9 +582,11 @@ The following features are planned for future versions:
 
 - Binary file support (`Uint8Array`, `Blob`)
 - File metadata (mime type, permissions)
-- File system snapshots/clones
+- File system snapshots/clones (`toJSON`, `fromJSON`)
 - Search operations (`find`, `glob`, `grep`)
 - Lock timeouts/expiration
 - Batch operations
 - Audit log
 - Undo/redo
+- Async variants for future provider support
+- Streaming for large files
