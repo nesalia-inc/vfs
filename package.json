@@ -3,6 +3,7 @@
   "version": "0.1.7",
   "description": "TypeScript monorepo template with vitest, turbo, husky, and changesets",
   "scripts": {
+    "build:web": "pnpm --filter web build",
     "build": "turbo build",
     "dev": "turbo dev",
     "lint": "turbo lint",
