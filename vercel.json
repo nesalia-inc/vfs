@@ -1,5 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "cd apps/web && pnpm build",
-  "installCommand": "cd apps/web && pnpm install"
+  "buildCommand": "pnpm --filter web build",
+  "installCommand": "pnpm install",
+  "framework": "nextjs"
 }
