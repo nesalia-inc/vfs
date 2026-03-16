@@ -22,6 +22,10 @@
       "dependsOn": ["^test"],
       "cache": true
     },
+    "types:check": {
+      "dependsOn": ["^types:check"],
+      "cache": true
+    },
     "clean": {
       "cache": false
     }
